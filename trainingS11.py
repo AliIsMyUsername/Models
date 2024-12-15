@@ -1,16 +1,17 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 import numpy as np
+from joblib import dump
 
 # Load the dataset
 file_path = r'E:/ML Models/S11_allData_V2.csv'
 data = pd.read_csv(file_path)
 
 # Define input features and target
-X = data[['R', 'C', ' HL', ' h_B', ' h', ' d', ' a_B', ' a', 'Frequency (GHz)']]
+X = data[['R', 'C', 'HL', 'h_B', 'h', 'd', 'a_B', 'a', 'Frequency (GHz)']]
 y = data['S Average']
 
 # Split data into training and testing sets
@@ -21,8 +22,8 @@ scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# Train a linear regression model
-model = LinearRegression()
+# Train a Random Forest Regressor model
+model = RandomForestRegressor(n_estimators=100, random_state=42)
 model.fit(X_train_scaled, y_train)
 
 # Make predictions
@@ -43,7 +44,7 @@ frequencies = np.arange(20.0, 30.01, 0.01)  # Generate frequencies from 20 to 30
 # Create a DataFrame for predictions
 input_data = pd.DataFrame([
     fixed_parameters + [freq] for freq in frequencies
-], columns=['R', 'C', ' HL', ' h_B', ' h', ' d', ' a_B', ' a', 'Frequency (GHz)'])
+], columns=['R', 'C', 'HL', 'h_B', 'h', 'd', 'a_B', 'a', 'Frequency (GHz)'])
 
 # Scale the input data
 input_data_scaled = scaler.transform(input_data)
@@ -61,3 +62,7 @@ print(output_df.head())
 # Save to a CSV file if needed
 output_df.to_csv('predicted_s_average.csv', index=False)
 print("\nPredictions saved to 'predicted_s_average.csv'")
+
+dump(model, 'S11_random_forest_model.joblib')
+print("Model saved to 'S11_random_forest_model.joblib'")
+

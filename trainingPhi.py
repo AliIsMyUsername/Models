@@ -4,42 +4,77 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 import numpy as np
-import re
 from joblib import dump
 
-# Load the dataset
-file_path = r'E:/ML Models/PhiSampeld_allData_V2.csv'
-data = pd.read_csv(file_path)
+# File path
+file_path = r'E:/ML Models/Phi_allData.csv'
 
+# Chunk size for processing data in parts
+chunk_size = 1_000_000
 
+# Data type specification for memory optimization
+data_types = {
+    'R': 'int32',  # R is an integer
+    'C': 'int32',  # C is an integer
+    'HL': 'float32',  # HL can stay as float if it's continuous
+    'h_B': 'float32',
+    'h': 'float32',
+    'd': 'float32',
+    'a_B': 'float32',
+    'a': 'float32',
+    'Frequency (GHz)': 'float32',  # Frequency as a float
+    'Theta': 'int32',  # Angular parameters as integers
+    'Phi': 'int32',
+    'Abs(Dir.)': 'float32',  # Target variable
+}
 
-# Handle missing or invalid values
-data = data.replace([np.inf, -np.inf], np.nan).dropna()
-
-# Define input features and target
-X = data[['R', 'C', 'HL', 'h_B', 'h', 'd', 'a_B', 'a', 'Frequency (GHz)', 'Theta', 'Phi']]
-y = data['Abs(Dir.)']
-
-# Split data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Normalize the input features
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
-
-# Train a Random Forest Regressor model
+# Initialize model and scaler
 model = RandomForestRegressor(n_estimators=100, random_state=42)
-model.fit(X_train_scaled, y_train)
+scaler = StandardScaler()
 
-# Make predictions
-y_pred = model.predict(X_test_scaled)
+# Variables for tracking incremental training
+data_processed = 0
+first_chunk = True
 
-# Evaluate the model
-mse = mean_squared_error(y_test, y_pred)
-r2 = r2_score(y_test, y_pred)
+# Process the dataset in chunks
+for chunk in pd.read_csv(file_path, chunksize=chunk_size, dtype=data_types, low_memory=False):
+    # Handle missing or invalid values
+    chunk = chunk.replace([np.inf, -np.inf], np.nan).dropna()
 
-print("Model Evaluation:")
+    # Define input features and target
+    X_chunk = chunk[['R', 'C', 'HL', 'h_B', 'h', 'd', 'a_B', 'a', 'Frequency (GHz)', 'Theta', 'Phi']]
+    y_chunk = chunk['Abs(Dir.)']
+
+    # Scale the input features
+    if first_chunk:
+        X_chunk_scaled = scaler.fit_transform(X_chunk)
+        first_chunk = False
+    else:
+        X_chunk_scaled = scaler.transform(X_chunk)
+
+    # Train the model incrementally
+    model.fit(X_chunk_scaled, y_chunk)
+
+    # Update the count of processed rows
+    data_processed += len(chunk)
+    print(f"Processed {data_processed} rows...")
+
+# Evaluate the model on a separate test set
+# Load a smaller test dataset or use a validation set
+validation_data = pd.read_csv(file_path, nrows=100_000, dtype=data_types, low_memory=False)  # Adjust path or size as needed
+
+# Handle missing or invalid values in the validation data
+validation_data = validation_data.replace([np.inf, -np.inf], np.nan).dropna()
+X_val = validation_data[['R', 'C', 'HL', 'h_B', 'h', 'd', 'a_B', 'a', 'Frequency (GHz)', 'Theta', 'Phi']]
+y_val = validation_data['Abs(Dir.)']
+X_val_scaled = scaler.transform(X_val)
+
+# Make predictions and evaluate
+y_pred = model.predict(X_val_scaled)
+mse = mean_squared_error(y_val, y_pred)
+r2 = r2_score(y_val, y_pred)
+
+print("\nModel Evaluation:")
 print(f"Mean Squared Error: {mse:.4f}")
 print(f"R^2 Score: {r2:.4f}")
 
@@ -74,5 +109,7 @@ print(output_df.head())
 output_df.to_csv('predicted_abs_dir.csv', index=False)
 print("\nPredictions saved to 'predicted_abs_dir.csv'")
 
+# Save the trained model and scaler for future use
 dump(model, 'Phi_random_forest_model.joblib')
-print("Model saved to 'Phi_random_forest_model.joblib'")
+dump(scaler, 'scaler.pkl')
+print("\nModel and scaler saved.")
